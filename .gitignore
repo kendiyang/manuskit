@@ -1,0 +1,66 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# Environment
+.env
+.env.local
+.env.development.local
+.test.env.local
+.env.production.local
+!.env.example
+production.env
+*.env
+
+# OAuth Tokens (NEVER commit these!)
+tokens/
+*_tokens.json
+
+# IDE
+.idea
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node.js (legacy)
+node_modules
+.pnp
+.pnp.js
+coverage
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.turbo
+db/data
+*.tsbuildinfo
+out
+
+# Other
+.aider*
+extensions/*

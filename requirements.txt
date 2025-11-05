@@ -1,0 +1,33 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Browser Automation
+steel-sdk
+browser-use
+playwright
+cdp-use
+
+# AI/LLM Integration
+langchain-openai
+anthropic
+google-genai
+openai
+
+# Data Validation
+pydantic
+pydantic-settings
+
+# Utilities
+python-dotenv
+httpx
+aiohttp
+
+# Development Tools
+black
+ruff
+mypy
+pytest
+pytest-asyncio
+pytest-cov
