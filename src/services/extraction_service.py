@@ -296,79 +296,6 @@ class ExtractionService:
             "relatedTopics": []
         }
         
-        def _load_json_if_possible(text: str) -> Optional[Dict[str, Any]]:
-            """Attempt to robustly extract the first JSON object from a noisy string.
-            Strategy:
-            1) Prefer fenced ```json code blocks
-            2) Fallback to any fenced code block containing an object
-            3) Scan for the first balanced {...} and try to json.loads it
-            4) Detect attachment file paths like /tmp/.../*.json and read
-            """
-            if not text:
-                return None
-            # 1) ```json fenced block
-            try:
-                m = re.search(r"```\s*json\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
-                if m:
-                    candidate = m.group(1)
-                    return json.loads(candidate)
-            except Exception:
-                pass
-            # 2) any fenced block with an object
-            try:
-                m = re.search(r"```[\w\-]*\s*(\{[\s\S]*?\})\s*```", text)
-                if m:
-                    candidate = m.group(1)
-                    return json.loads(candidate)
-            except Exception:
-                pass
-            # 3) balanced brace scan
-            try:
-                start_indices = [i for i, ch in enumerate(text) if ch == '{']
-                for start in start_indices:
-                    brace = 0
-                    in_str = False
-                    esc = False
-                    end = None
-                    for i in range(start, len(text)):
-                        ch = text[i]
-                        if in_str:
-                            if esc:
-                                esc = False
-                            elif ch == '\\':
-                                esc = True
-                            elif ch == '"':
-                                in_str = False
-                        else:
-                            if ch == '"':
-                                in_str = True
-                            elif ch == '{':
-                                brace += 1
-                            elif ch == '}':
-                                brace -= 1
-                                if brace == 0:
-                                    end = i + 1
-                                    break
-                    if end:
-                        candidate = text[start:end]
-                        try:
-                            return json.loads(candidate)
-                        except Exception:
-                            continue
-            except Exception:
-                pass
-            # 4) attachment json path
-            try:
-                m = re.search(r"Attachment\s*:\s*(/[^\s]+\.json)", text)
-                if m:
-                    path = m.group(1)
-                    if os.path.exists(path):
-                        with open(path, 'r', encoding='utf-8') as f:
-                            return json.load(f)
-            except Exception:
-                pass
-            return None
-        
         # Try different methods to extract the result
         try:
             # Method 1: Check if result has final_result method
@@ -376,48 +303,39 @@ class ExtractionService:
                 final_result = agent_result.final_result()
                 logger.info(f"Got final_result: {type(final_result)}")
                 if isinstance(final_result, str):
-                    parsed = _load_json_if_possible(final_result)
-                    if parsed:
-                        result_data = parsed
+                    # Try to parse JSON from string
+                    json_match = re.search(r'\{.*\}', final_result, re.DOTALL)
+                    if json_match:
+                        result_data = json.loads(json_match.group(0))
                 elif isinstance(final_result, dict):
                     result_data = final_result
             
             # Method 2: Check if result has history with extracted data
-            if (not result_data or result_data.get('sections') == []) and hasattr(agent_result, 'history'):
+            elif hasattr(agent_result, 'history'):
                 # Look for the last done action in history
-                for item in reversed(getattr(agent_result, 'history', []) or []):
-                    text = None
+                for item in reversed(agent_result.history):
                     if hasattr(item, 'result') and item.result:
                         text = str(item.result)
-                    elif hasattr(item, 'content') and item.content:
-                        text = str(item.content)
-                    if text:
-                        parsed = _load_json_if_possible(text)
-                        if parsed and ('url' in parsed or 'question' in parsed or 'sections' in parsed):
-                            result_data = parsed
-                            break
+                        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+                        if json_match:
+                            parsed = json.loads(json_match.group(0))
+                            if 'url' in parsed or 'question' in parsed:
+                                result_data = parsed
+                                break
             
             # Method 3: Try to parse from string representation
-            if result_data == {
-                "url": "https://www.reddit.com/answers/",
-                "question": question,
-                "sources": [],
-                "sections": [],
-                "relatedPosts": [],
-                "relatedTopics": []
-            } and isinstance(agent_result, str):
-                parsed = _load_json_if_possible(agent_result)
-                if parsed:
-                    result_data = parsed
-        except Exception as e:
+            elif isinstance(agent_result, str):
+                json_match = re.search(r'\{.*\}', agent_result, re.DOTALL)
+                if json_match:
+                    result_data = json.loads(json_match.group(0))
+                    
+        except (AttributeError, json.JSONDecodeError, TypeError) as e:
             logger.warning(f"Failed to parse agent result as JSON: {e}")
         
         # Normalize data types for Pydantic validation
         result_data = self._normalize_result_data(result_data)
         
-        logger.info(
-            f"Parsed result - URL: {result_data.get('url')}, Sections: {len(result_data.get('sections', []))}, Posts: {len(result_data.get('relatedPosts', []))}"
-        )
+        logger.info(f"Parsed result - URL: {result_data.get('url')}, Sections: {len(result_data.get('sections', []))}, Posts: {len(result_data.get('relatedPosts', []))}")
         
         return ExtractionResult(**result_data)
     
