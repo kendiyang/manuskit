@@ -108,7 +108,7 @@ class ExtractionService:
         llm_params = {
             "model": self.model,
             "temperature": 0.3,
-            "api_key": self.openai_api_key,
+            "api_key": self.openai_api_key
         }
         
         # Add base_url if provided (for custom endpoints)
@@ -119,10 +119,8 @@ class ExtractionService:
         is_deepseek = "deepseek" in self.model.lower()
         if is_deepseek:
             logger.warning(f"DeepSeek model detected: {self.model}")
-            logger.warning("DeepSeek does NOT support structured output (response_format)")
+            logger.warning("DeepSeek models  support structured output (response_format), and can sometimes return empty content.")
             logger.warning("This will cause failures. Please use gpt-4o, gpt-4o-mini, or claude instead.")
-            # Note: add_schema_to_system_prompt doesn't help because browser-use 
-            # still tries to use response_format at the API level
         
         llm = ChatOpenAI(**llm_params)
         logger.info(f"LLM created: provider={llm.provider}, model={llm.model}")
@@ -195,14 +193,14 @@ class ExtractionService:
             
             # Detailed extraction prompt for Reddit Answers
             task = f"""
-            Go to https://www.reddit.com/answers/ and search for: "{question}"
+            Go to https://www.reddit.com/answers/ and search for: {question} and  scroll down and click for: "View all" and wait for the page to load all related posts
             
             Then extract and structure the following information:
             1. The full URL of the Reddit Answers page
             2. The exact question as displayed
             3. All source subreddit URLs mentioned
             4. All answer sections with their headings and content (as separate paragraphs)
-            5. Related posts with rank, title, subreddit, URL, upvotes, comments, domain, promoted status, and score
+            5. All related posts with rank, title, subreddit, URL, upvotes, comments, domain, promoted status, and score 
             6. Related topics/questions suggested
             
             Return the data in JSON format following this structure:
@@ -373,55 +371,3 @@ class ExtractionService:
                     post['score'] = 0
         
         return data
-    
-    async def extract_generic_content(
-        self,
-        url: str,
-        extraction_instructions: str
-    ) -> Dict[str, Any]:
-        """
-        Extract content from any website with custom instructions.
-        
-        Args:
-            url: Target URL
-            extraction_instructions: What to extract and how
-            
-        Returns:
-            Dictionary with extracted content
-        """
-        steel_client = None
-        session = None
-        
-        try:
-            logger.info(f"Starting generic extraction from: {url}")
-            
-            # Create Steel session
-            steel_client = self._create_steel_client()
-            session = steel_client.sessions.create()
-            
-            # Connect browser-use to Steel
-            domain = os.getenv("DOMAIN", "http://localhost:3000")
-            cdp_url = replace_protocol_mapping(domain)
-            
-            # Create AI agent
-            llm = self._create_llm()
-            task = f"Go to {url} and {extraction_instructions}"
-            
-            agent = Agent(
-                task=task,
-                llm=llm,
-                browser_session=BrowserSession(cdp_url=cdp_url)
-            )
-            
-            # Run extraction
-            result = await agent.run()
-            
-            # Return raw result
-            return {"url": url, "result": str(result)}
-            
-        finally:
-            if steel_client and session:
-                try:
-                    steel_client.sessions.release(session.id)
-                except Exception as e:
-                    logger.warning(f"Failed to release Steel session: {e}")
